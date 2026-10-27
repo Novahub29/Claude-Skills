@@ -1,5 +1,12 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <title>ASR Deep Dive</title>
+<meta name="description" content="Pilot an ROV, sat diver or survey AUV through the deep. Collect every ASR octopus, dodge the jellyfish and see how deep you can go. A game from AS-Recruitment.">
+<meta property="og:title" content="ASR Deep Dive">
+<meta property="og:description" content="Collect every ASR octopus, dodge the jellyfish and see how deep you can go.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#050709">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050709'/%3E%3Ccircle cx='16' cy='13' r='8' fill='%23f3f5f6'/%3E%3Ccircle cx='12.5' cy='13' r='2.4' fill='%23050709'/%3E%3Ccircle cx='19.5' cy='13' r='2.4' fill='%23050709'/%3E%3Cpath d='M10 20q-4 2-3 7M22 20q4 2 3 7M14 21v6M18 21v6' stroke='%23f3f5f6' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+</head><body>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -45,6 +52,12 @@ body{margin:0;background:var(--abyss);color:var(--text);font-family:var(--body);
 .btn-sm:hover{border-color:var(--edge)}
 button:focus-visible{outline:2px solid var(--text);outline-offset:2px}
 .stage{position:relative;flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.stage:has(.overlay:not([hidden])){touch-action:pan-y}
+.actions{display:flex;gap:8px}
+.actions .btn-sm{flex:1;padding:11px 10px}
+.cta{display:block;font-family:var(--display);font-weight:600;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--rov);text-decoration:none;border:1px solid var(--rov);border-radius:3px;padding:11px 10px}
+.cta:hover{background:color-mix(in srgb,var(--rov) 12%,transparent)}
+.newbest{color:var(--rov)}
 .screen{position:relative}
 canvas{display:block;border-radius:4px;box-shadow:0 0 0 1px var(--rock),0 24px 60px -24px #000}
 .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
@@ -223,7 +236,7 @@ canvas{display:block;border-radius:4px;box-shadow:0 0 0 1px var(--rock),0 24px 6
   let mode = "title", modeT = 0, frightT = 0, frightMax = 7, combo = 0, roundT = 0;
   let player, enemies = [], popups = [], snow = [], bubbles = [], bubbleT = 0;
   let muted = false, audio = null, pausedFrom = null;
-  let eaten = 0, bonus = null, extraGiven = false;
+  let eaten = 0, bonus = null, extraGiven = false, newBest = false;
 
   /* ---------- vehicles ---------- */
   const VEHICLES = {
@@ -941,15 +954,17 @@ canvas{display:block;border-radius:4px;box-shadow:0 0 0 1px var(--rock),0 24px 6
         <p class="small">Keyboard: arrows or WASD. Phone: swipe or use the pad.</p>`;
     } else if (kind === "over") {
       panel.innerHTML = `
-        <span class="eyebrow">Dive over</span>
+        <span class="eyebrow${newBest ? " newbest" : ""}">${newBest ? "New best score" : "Dive over"}</span>
         <h1>Back on deck</h1>
         <div class="result">
           <div class="stat"><span class="label">Score</span><span class="val">${score.toLocaleString("en-GB")}</span></div>
           <div class="stat"><span class="label">Best</span><span class="val gold">${best.toLocaleString("en-GB")}</span></div>
           <div class="stat"><span class="label">Depth</span><span class="val">${level * 250} m</span></div>
         </div>
-        ${pickerHTML()}
-        <button class="big" id="goBtn" type="button">Dive again</button>`;
+        <button class="big" id="goBtn" type="button">Dive again</button>
+        <div class="actions"><button class="btn-sm" id="shareBtn" type="button">Share score</button></div>
+        <a class="cta" href="https://as-recruitment.com" target="_blank" rel="noopener">Fancy the real job? See our roles</a>
+        ${pickerHTML()}`;
     } else if (kind === "paused") {
       panel.innerHTML = `
         <span class="eyebrow">All stop</span>
@@ -957,6 +972,7 @@ canvas{display:block;border-radius:4px;box-shadow:0 0 0 1px var(--rock),0 24px 6
         <button class="big" id="goBtn" type="button">Resume</button>`;
     }
     $("goBtn").addEventListener("click", () => { kind === "paused" ? togglePause() : startGame(); });
+    if (kind === "over") $("shareBtn").addEventListener("click", shareScore);
     wirePicker();
     $("goBtn").focus({ preventScroll: true });
   }
@@ -998,8 +1014,23 @@ canvas{display:block;border-radius:4px;box-shadow:0 0 0 1px var(--rock),0 24px 6
     overlay.hidden = true;
     sfxStart(); sayEvent("start");
   }
+  async function shareScore() {
+    const btn = $("shareBtn");
+    const text = `I reached ${level * 250} m and scored ${score.toLocaleString("en-GB")} on ASR Deep Dive. Can you beat it?`;
+    const url = location.href.split("#")[0];
+    try {
+      if (navigator.share) { await navigator.share({ title: "ASR Deep Dive", text, url }); return; }
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      btn.textContent = "Copied";
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      btn.textContent = "Couldn't share";
+    }
+    setTimeout(() => { if (btn.isConnected) btn.textContent = "Share score"; }, 2000);
+  }
   function gameOver() {
     mode = "over";
+    newBest = score > best && score > 0;
     if (score > best) { best = score; try { localStorage.setItem("asr-deep-dive-best", String(best)); } catch (e) {} }
     showOverlay("over");
   }
